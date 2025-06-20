@@ -23,6 +23,7 @@ halvarine</textarea><br>
   <button id="check-btn">Check Prices</button>
   <button id="open-checkjebon-btn" type="button">Open on Checkjebon</button>
   <h2>Prices</h2>
+  <div id="last-updated"></div>
   <div id="supermarket-table"></div>
   <h2>Details</h2>
   <div id="price-summary"></div>
@@ -76,10 +77,12 @@ halvarine</textarea><br>
       const result = document.getElementById('result');
       const priceSummary = document.getElementById('price-summary');
       const supermarketTable = document.getElementById('supermarket-table');
+      const lastUpdatedDiv = document.getElementById('last-updated');
       const items = textarea.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
       result.textContent = 'Loading...';
       priceSummary.innerHTML = '';
       supermarketTable.innerHTML = '';
+      lastUpdatedDiv.textContent = '';
       if (!window.checkjebon || !window.checkjebon.getPricesForProducts) {
         result.textContent = 'checkjebon library not loaded.';
         return;
@@ -89,6 +92,13 @@ halvarine</textarea><br>
         supermarketTable.innerHTML = formatSupermarketTable(data);
         priceSummary.innerHTML = formatSupermarketPrices(data);
         result.textContent = JSON.stringify(data, null, 2);
+        // Show last updated info
+        const lastUpdated = window.checkjebon.pricesLastUpdated && window.checkjebon.pricesLastUpdated();
+        if (lastUpdated) {
+          lastUpdatedDiv.textContent = 'Last update: ' + new Date(lastUpdated).toLocaleString();
+        } else {
+          lastUpdatedDiv.textContent = 'Last update: unknown';
+        }
       } catch (e) {
         result.textContent = 'Error: ' + e.message;
       }

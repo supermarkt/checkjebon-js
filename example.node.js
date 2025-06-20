@@ -1,4 +1,4 @@
-const { getPricesForProducts, getCheckjebonLink } = require('./checkjebon');
+const { getPricesForProducts, getCheckjebonLink, pricesLastUpdated } = require('./checkjebon');
 
 const products = [
   "1,5 liter halfvolle melk",
@@ -33,5 +33,13 @@ const products = [
   const shoppingList = products.join('\n');
   const url = getCheckjebonLink(shoppingList);
   console.log(`\nOpen on Checkjebon: ${url}`);
+
+  // Show last updated info
+  const lastUpdated = pricesLastUpdated && pricesLastUpdated();
+  if (lastUpdated) {
+    console.log(`\nLast update: ${new Date(lastUpdated).toLocaleString()}`);
+  } else {
+    console.log('\nLast update: unknown');
+  }
 
 })();

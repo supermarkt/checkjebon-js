@@ -80,6 +80,32 @@ function getCheckjebonLink(shoppingList) {
     .replace(/\r\n|\n|\r/g, '%0A');
 }
 
+/**
+ * 
+ * @returns {Date|null} The last modified date of the prices cache, or null if not available
+ */
+function pricesLastUpdated() {
+  let lastModified = null;
+  if (isNode) {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(CACHE_KEY)) {
+        const raw = fs.readFileSync(CACHE_KEY, 'utf-8');
+        const parsed = JSON.parse(raw);
+        lastModified = parsed.lastModified || null;
+      }
+    } catch (e) {}
+  } else if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        lastModified = parsed.lastModified || null;
+      }
+    } catch (e) {}
+  }
+  return lastModified;
+}
 
 
 
@@ -213,8 +239,8 @@ function getCache() {
   return null;
 }
 
-function setCache(data) {
-  const cacheObj = { fetchedAt: Date.now(), data };
+function setCache(data, lastModified) {
+  const cacheObj = { fetchedAt: Date.now(), data, lastModified: lastModified || null };
   if (isNode) {
     try {
       const fs = require('fs');
@@ -238,11 +264,12 @@ function fetchSupermarketsJson() {
           return;
         }
         let data = '';
+        let lastModified = res.headers['last-modified'] || null;
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
             const parsedData = JSON.parse(data);
-            setCache(parsedData);
+            setCache(parsedData, lastModified);
             resolve(parsedData);
           } catch (e) {
             reject(e);
@@ -254,11 +281,11 @@ function fetchSupermarketsJson() {
     return fetch(SUPERMARKETS_URL)
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch supermarkets.json');
-        return res.json();
-      })
-      .then(data => {
-        setCache(data);
-        return data;
+        const lastModified = res.headers.get('Last-Modified') || null;
+        return res.json().then(data => {
+          setCache(data, lastModified);
+          return data;
+        });
       });
   } else {
     return Promise.reject(new Error('No fetch method available'));
@@ -272,10 +299,10 @@ async function getSupermarketsJson() {
 }
 
 
-
 const exported = {
   getPricesForProducts,
-  getCheckjebonLink
+  getCheckjebonLink,
+  pricesLastUpdated
 };
 
 if (isNode) {
