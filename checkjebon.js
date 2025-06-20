@@ -163,15 +163,17 @@ function compareMinimumAmounts(productAmount, searchAmount) {
 
 // --- PRODUCT SEARCH LOGIC ---
 function findProducts(products, value) {
-  const amount = getAmount(value);
-  if (amount) value = value.replace(amount, "");
-  const patterns = value.trim().split(/\s/g).filter(p => p).map(p => new RegExp(p.replace(/\s/g, ""), "i"));
+  // Ignore leading 'x ' (already bought) for search, but keep original for originalQuery
+  let searchValue = value.trim().replace(/^x\s+/i, '');
+  const amount = getAmount(searchValue);
+  if (amount) searchValue = searchValue.replace(amount, "");
+  const patterns = searchValue.trim().split(/\s/g).filter(p => p).map(p => new RegExp(p.replace(/\s/g, ""), "i"));
   let productMatches = products.filter(product =>
     patterns.every(pattern => pattern.test(product.n))
   );
   if (productMatches.length === 0) {
     // Fallback: fuzzy match
-    const fallbackPattern = [new RegExp(value.replace(/\s/g, "").split("").join(".*"), "i")];
+    const fallbackPattern = [new RegExp(searchValue.replace(/\s/g, "").split("").join(".*"), "i")];
     productMatches = products.filter(product =>
       fallbackPattern.every(pattern => pattern.test(product.n))
     );
