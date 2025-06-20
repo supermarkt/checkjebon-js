@@ -1,0 +1,8 @@
+# Ignore npm lock file
+package-lock.json
+
+# Ignore node modules directory
+node_modules/
+
+# Ignore supermarkets cache
+supermarkets.cache.json

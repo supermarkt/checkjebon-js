@@ -1,0 +1,19 @@
+{
+  "name": "checkjebon-js",
+  "version": "1.0.0",
+  "main": "checkjebon.js",
+  "description": "Fetch Dutch supermarket prices from www.checkjebon.nl.",
+  "author": "Sjoerd van der Hoorn",
+  "license": "MIT",
+  "homepage": "https://www.checkjebon.nl/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supermarkt/checkjebon-js"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "devDependencies": {
+    "mocha": "^11.7.0"
+  }
+}
