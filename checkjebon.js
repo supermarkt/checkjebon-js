@@ -58,6 +58,7 @@ async function getPricesForProducts(productNames) {
       code: supermarket.n,
       icon: supermarket.i || null,
       name: supermarket.c,
+      totalProducts: supermarket.d?.length || 0,
       products: foundProducts
     };
   });
