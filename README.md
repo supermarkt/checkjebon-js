@@ -35,7 +35,7 @@ cjb.getPricesForProducts(shoppingList).then(result => {
   const link = cjb.getCheckjebonLink(shoppingList);
   console.log(link);
 
-  const lastUpdate = pricesLastUpdated();
+  const lastUpdate = cjb.pricesLastUpdated();
   console.log(lastUpdate);
 
 });
