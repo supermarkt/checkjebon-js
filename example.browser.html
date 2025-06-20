@@ -34,7 +34,8 @@ halvarine</textarea><br>
       if (!Array.isArray(data)) return '';
       return data.map(sup => {
         const total = sup.products.reduce((sum, p) => sum + (typeof p.price === 'number' ? p.price : 0), 0);
-        let html = `<strong>${sup.supermarket}</strong> &middot; €${total.toFixed(2)}<ul>`;
+        let iconHtml = sup.icon ? `<img src="${sup.icon}" alt="icon" style="height:1em;vertical-align:middle;margin-right:0.5em;">` : '';
+        let html = `<strong>${iconHtml}${sup.name} <small>(${sup.code})</small></strong> &middot; €${total.toFixed(2)}<ul>`;
         html += sup.products.map(p => {
           let prodText = '';
           if (p.isEstimate) {
@@ -60,12 +61,12 @@ halvarine</textarea><br>
       // Calculate total price for each supermarket
       const rows = data.map(sup => {
         const total = sup.products.reduce((sum, p) => sum + (typeof p.price === 'number' ? p.price : 0), 0);
-        return { name: sup.supermarket, total };
+        return { name: sup.name, code: sup.code, icon: sup.icon, total };
       });
       // Sort by total price ascending
       rows.sort((a, b) => a.total - b.total);
-      let html = '<table border="1" cellpadding="6" style="margin-bottom:1em"><thead><tr><th>Supermarkt</th><th>Total</th></tr></thead><tbody>';
-      html += rows.map(row => `<tr><td>${row.name}</td><td>€${row.total.toFixed(2)}</td></tr>`).join('');
+      let html = '<table border="1" cellpadding="6" style="margin-bottom:1em"><thead><tr><th>Supermarkt</th><th>Code</th><th>Icon</th><th>Total</th></tr></thead><tbody>';
+      html += rows.map(row => `<tr><td>${row.name}</td><td>${row.code}</td><td>${row.icon ? `<img src='${row.icon}' alt='icon' style='height:1em;'>` : ''}</td><td>€${row.total.toFixed(2)}</td></tr>`).join('');
       html += '</tbody></table>';
       return html;
     }

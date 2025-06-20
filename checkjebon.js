@@ -55,9 +55,9 @@ async function getPricesForProducts(productNames) {
       }
     });
     return {
-      supermarket: supermarket.c,
-      supermarketBrand: supermarket.b || null,
-      supermarketLink: supermarket.u || null,
+      code: supermarket.n,
+      icon: supermarket.i || null,
+      name: supermarket.c,
       products: foundProducts
     };
   });
