@@ -59,6 +59,39 @@ describe('getPricesForProductsAtMultipleSupermarkets', function () {
       assert(e.message.includes('No matching supermarkets'), 'Error message should mention no matching supermarkets');
     }
   });
+
+  it('should return all products across selected supermarkets', async () => {
+    const selectedStores = ["ah", "dirk", "jumbo"];
+    const result = await getPricesForProductsAtMultipleSupermarkets(testProducts, 3, selectedStores);
+    
+    const totalProducts = result.supermarkets.reduce((sum, store) => sum + store.products.length, 0);
+    assert(totalProducts > 0, 'Should assign at least one product to a supermarket');
+  });
+
+  it('should include product details in the result', async () => {
+    const selectedStores = ["ah", "jumbo"];
+    const result = await getPricesForProductsAtMultipleSupermarkets(testProducts, 2, selectedStores);
+    
+    for (const store of result.supermarkets) {
+      assert(typeof store.code === 'string', 'Store should have code');
+      assert(typeof store.name === 'string', 'Store should have name');
+      assert(Array.isArray(store.products), 'Store should have products array');
+      
+      for (const product of store.products) {
+        assert(product.name !== undefined, 'Product should have name');
+        assert(typeof product.price === 'number', 'Product should have numeric price');
+        assert(product.originalQuery !== undefined, 'Product should have originalQuery');
+      }
+    }
+  });
+
+  it('should work with maxSupermarketVisitCount of 1', async () => {
+    const selectedStores = ["ah", "dirk", "jumbo"];
+    const result = await getPricesForProductsAtMultipleSupermarkets(testProducts, 1, selectedStores);
+    
+    assert.strictEqual(result.supermarkets.length, 1, 'Should visit exactly 1 supermarket');
+    assert(result.totalCost > 0, 'Should have a positive total cost');
+  });
 });
 
 describe('getSupermarkets', function () {
@@ -76,6 +109,21 @@ describe('getSupermarkets', function () {
       assert(typeof supermarket.code === 'string', 'code should be a string');
       assert(typeof supermarket.name === 'string', 'name should be a string');
       assert(supermarket.icon === null || typeof supermarket.icon === 'string', 'icon should be null or string');
+    }
+  });
+
+  it('should return unique supermarket codes', async () => {
+    const supermarkets = await getSupermarkets();
+    const codes = supermarkets.map(s => s.code);
+    const uniqueCodes = new Set(codes);
+    assert.strictEqual(codes.length, uniqueCodes.size, 'All supermarket codes should be unique');
+  });
+
+  it('should return non-empty supermarket names', async () => {
+    const supermarkets = await getSupermarkets();
+    for (const supermarket of supermarkets) {
+      assert(supermarket.name.length > 0, 'Supermarket name should not be empty');
+      assert(supermarket.code.length > 0, 'Supermarket code should not be empty');
     }
   });
 });
