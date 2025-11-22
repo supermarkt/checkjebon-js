@@ -7,7 +7,7 @@ const SUPERMARKETS_URL = 'https://www.checkjebon.nl/data/supermarkets.json';
 
 /**
  * Get a list of all available supermarkets with their code, name, and icon.
- * @returns {Promise<Array>} Array of supermarkets with code, name, and icon
+ * @returns {Promise<Array<{code: string, name: string, icon: string|null}>>} Array of supermarkets with code, name, and icon
  */
 async function getSupermarkets() {
   const supermarkets = await getSupermarketsJson();
@@ -125,7 +125,7 @@ function pricesLastUpdated() {
  * @param {string[]} productNames - List of products to buy
  * @param {number} maxSupermarketVisitCount - Maximum number of supermarkets to visit
  * @param {string[]} selectedSupermarketCodes - Array of supermarket codes to choose from
- * @returns {Promise<Object>} Object with totalCost, supermarkets array (each with code, name, icon, products)
+ * @returns {Promise<{totalCost: number, supermarkets: Array<{code: string, name: string, icon: string|null, products: Array}>}>} Object with totalCost and supermarkets array
  */
 async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSupermarketVisitCount, selectedSupermarketCodes) {
   // Get prices for all products at all supermarkets
@@ -145,6 +145,11 @@ async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSuper
   const productCount = productNames.length;
   const supermarketCount = selectedSupermarkets.length;
   
+  // Helper function to check if a product has a valid, non-estimated price
+  const isValidPrice = (product) => {
+    return product && !product.isEstimate && typeof product.price === 'number';
+  };
+  
   // Create price matrix: priceMatrix[productIndex][supermarketIndex] = price (or null)
   const priceMatrix = [];
   for (let p = 0; p < productCount; p++) {
@@ -152,16 +157,13 @@ async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSuper
     for (let s = 0; s < supermarketCount; s++) {
       const product = selectedSupermarkets[s].products[p];
       // Only use real prices, not estimates
-      priceMatrix[p][s] = (product && !product.isEstimate && typeof product.price === 'number') 
-        ? product.price 
-        : null;
+      priceMatrix[p][s] = isValidPrice(product) ? product.price : null;
     }
   }
   
   // Find optimal assignment using a greedy approach:
-  // 1. For each product, identify which supermarket(s) have it at the lowest price
-  // 2. Iteratively select supermarkets that provide the most value
-  // This is a variant of the set cover problem, we'll use a greedy heuristic
+  // Iteratively select supermarkets that provide the most products at their cheapest price,
+  // minimizing total cost while respecting the maximum number of stores constraint.
   
   const bestCombination = findBestSupermarketCombination(
     priceMatrix, 

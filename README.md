@@ -136,7 +136,9 @@ Get the timestamp when price data was last updated.
 ```javascript
 const lastUpdate = pricesLastUpdated();
 if (lastUpdate) {
-  console.log(`Prices last updated: ${new Date(lastUpdate).toLocaleString()}`);
+  console.log(`Prices last updated: ${lastUpdate.toLocaleString()}`);
+} else {
+  console.log('Prices last updated: Unknown');
 }
 ```
 
