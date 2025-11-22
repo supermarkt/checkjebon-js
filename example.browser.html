@@ -27,6 +27,19 @@ halvarine</textarea><br>
   <div id="supermarket-table"></div>
   <h2>Details</h2>
   <div id="price-summary"></div>
+  
+  <hr>
+  
+  <h1>Multi-Supermarket Shopping Optimizer</h1>
+  <p>Find the optimal combination of supermarkets to minimize total cost!</p>
+  <label for="max-stores">Maximum stores to visit:</label>
+  <input type="number" id="max-stores" value="3" min="1" max="10" style="width: 60px;"><br><br>
+  <label for="selected-stores">Selected supermarket codes (comma-separated):</label><br>
+  <input type="text" id="selected-stores" value="ah,aldi,dirk,jumbo,lidl,vomar" style="width: 100%; max-width: 500px;"><br><br>
+  <button id="optimize-btn">Optimize Shopping List</button>
+  <h2>Optimal Shopping Plan</h2>
+  <div id="optimize-result"></div>
+  
   <h2>JSON</h2>
   <pre id="result"></pre>
 
@@ -108,6 +121,55 @@ halvarine</textarea><br>
       const textarea = document.getElementById('shopping-list');
       const url = window.checkjebon.getCheckjebonLink(textarea.value);
       window.open(url, '_blank');
+    };
+
+    document.getElementById('optimize-btn').onclick = async function () {
+      const textarea = document.getElementById('shopping-list');
+      const maxStores = parseInt(document.getElementById('max-stores').value);
+      const selectedStores = document.getElementById('selected-stores').value
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      const optimizeResult = document.getElementById('optimize-result');
+      
+      const items = textarea.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      optimizeResult.innerHTML = '<p>Loading...</p>';
+      
+      if (!window.checkjebon || !window.checkjebon.getOptimalShoppingPlan) {
+        optimizeResult.innerHTML = '<p style="color:red;">checkjebon library not loaded or function not available.</p>';
+        return;
+      }
+      
+      try {
+        const result = await window.checkjebon.getOptimalShoppingPlan(items, maxStores, selectedStores);
+        
+        let html = `<p><strong>Total Cost: €${result.totalCost.toFixed(2)}</strong></p>`;
+        html += `<p><strong>Stores to Visit: ${result.supermarkets.length}</strong></p>`;
+        
+        for (const store of result.supermarkets) {
+          const storeTotal = store.products.reduce((sum, p) => sum + (typeof p.price === 'number' ? p.price : 0), 0);
+          let iconHtml = store.icon ? `<img src="${store.icon}" alt="icon" style="height:1.5em;vertical-align:middle;margin-right:0.5em;">` : '';
+          html += `<h3>${iconHtml}${store.name} (${store.code}) - €${storeTotal.toFixed(2)}</h3>`;
+          html += '<ul>';
+          for (const product of store.products) {
+            console.log(product);
+            const amount = product.amount ? product.amount + ' ' : '';
+            const priceStr = typeof product.price === 'number' ? `€${product.price.toFixed(2)}` : '?';
+            if (product.link) {
+              html += `<li><a href="${product.link}" target="_blank">${amount}${product.name}</a> - ${priceStr}</li>`;
+            } else if (!product.isEstimate) {
+              html += `<li>${amount}${product.name} - ${priceStr}</li>`;
+            } else {
+              html += `<li><em>${product.originalQuery} - ${priceStr} (geschat)</em></li>`;
+            }
+          }
+          html += '</ul>';
+        }
+        
+        optimizeResult.innerHTML = html;
+      } catch (e) {
+        optimizeResult.innerHTML = `<p style="color:red;">Error: ${e.message}</p>`;
+      }
     };
   </script>
 </body>

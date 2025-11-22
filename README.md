@@ -4,9 +4,143 @@ Checkjebon.nl makes comparing food prices across multiple supermarkets easy. Wit
 
 ## Features
 - Compare prices for products across multiple supermarkets
+- Optimize shopping across multiple stores to minimize total cost
+- Get list of available supermarkets
 - Fuzzy product search and best-match selection
 - Support for generic and brand-specific queries
 - Price estimation when no direct match is found
+- Generate Checkjebon.nl links for shopping lists
+
+## API Reference
+
+### getPricesForProducts(productNames)
+
+Get price information for a list of products across all available supermarkets.
+
+**Parameters:**
+- `productNames` (string[]): Array of product names to search for
+
+**Returns:** `Promise<Array>`
+- Array of supermarket objects, each containing:
+  - `code` (string): Supermarket code (e.g., "ah", "jumbo")
+  - `name` (string): Supermarket display name
+  - `icon` (string|null): URL to supermarket icon
+  - `totalProducts` (number): Total products available at this supermarket
+  - `products` (Array): Array of product objects with:
+    - `name` (string|null): Product name
+    - `link` (string|null): Link to product page
+    - `price` (number|null): Price in euros
+    - `amount` (string|null): Product size/amount
+    - `isEstimate` (boolean): Whether price is estimated
+    - `originalQuery` (string): Original search query
+
+**Example:**
+```javascript
+const products = await getPricesForProducts([
+  "1,5 liter halfvolle melk",
+  "250 gram roomboter",
+  "6 eieren"
+]);
+
+for (const supermarket of products) {
+  console.log(`${supermarket.name}: €${supermarket.products[0].price}`);
+}
+```
+
+### getOptimalShoppingPlan(productNames, maxSupermarketVisitCount, selectedSupermarketCodes)
+
+Find the optimal combination of supermarkets to buy products from, minimizing total cost while respecting the maximum number of stores you want to visit.
+
+**Parameters:**
+- `productNames` (string[]): Array of product names to buy
+- `maxSupermarketVisitCount` (number): Maximum number of supermarkets to visit
+- `selectedSupermarketCodes` (string[]): Array of supermarket codes to choose from (e.g., ["ah", "jumbo", "lidl"])
+
+**Returns:** `Promise<Object>`
+- Object containing:
+  - `totalCost` (number): Total cost in euros for all products
+  - `supermarkets` (Array): Array of selected supermarket objects with:
+    - `code` (string): Supermarket code
+    - `name` (string): Supermarket name
+    - `icon` (string|null): Supermarket icon URL
+    - `products` (Array): Products to buy at this supermarket
+
+**Example:**
+```javascript
+const result = await getOptimalShoppingPlan(
+  ["melk", "brood", "kaas"],
+  3, // Visit maximum 3 stores
+  ["ah", "dirk", "jumbo", "vomar", "lidl", "aldi"]
+);
+
+console.log(`Total cost: €${result.totalCost}`);
+console.log(`Stores to visit: ${result.supermarkets.length}`);
+
+for (const store of result.supermarkets) {
+  console.log(`\nBuy at ${store.name}:`);
+  for (const product of store.products) {
+    console.log(`  - ${product.name}: €${product.price}`);
+  }
+}
+```
+
+### getSupermarkets()
+
+Get a list of all available supermarkets with their codes, names, and icons.
+
+**Returns:** `Promise<Array>`
+- Array of supermarket objects with:
+  - `code` (string): Supermarket code (e.g., "ah", "jumbo")
+  - `name` (string): Full supermarket name
+  - `icon` (string|null): URL to supermarket icon
+
+**Example:**
+```javascript
+const supermarkets = await getSupermarkets();
+
+console.log("Available supermarkets:");
+for (const store of supermarkets) {
+  console.log(`${store.code}: ${store.name}`);
+}
+```
+
+### getCheckjebonLink(shoppingList)
+
+Generate a Checkjebon.nl URL with a pre-filled shopping list.
+
+**Parameters:**
+- `shoppingList` (string|string[]): Shopping list as a string (one item per line) or array of items
+
+**Returns:** `string`
+- URL to open on Checkjebon.nl with the shopping list
+
+**Example:**
+```javascript
+const url = getCheckjebonLink([
+  "melk",
+  "brood",
+  "kaas"
+]);
+console.log(url);
+// Opens: https://www.checkjebon.nl/#melk%0Abrood%0Akaas
+```
+
+### pricesLastUpdated()
+
+Get the timestamp when price data was last updated.
+
+**Returns:** `Date|null`
+- Date object representing when prices were last fetched, or null if not available
+
+**Example:**
+```javascript
+const lastUpdate = pricesLastUpdated();
+if (lastUpdate) {
+  console.log(`Prices last updated: ${lastUpdate.toLocaleString()}`);
+} else {
+  console.log('Prices last updated: Unknown');
+}
+```
 
 ## How It Works
 For each product in your shopping list, the library:
@@ -19,7 +153,9 @@ For each product in your shopping list, the library:
 
 ## Example Usage
 
-```
+### Basic Price Comparison
+
+```javascript
 const cjb = require('./checkjebon');
 
 const shoppingList = [
@@ -29,7 +165,6 @@ const shoppingList = [
 ];
 
 cjb.getPricesForProducts(shoppingList).then(result => {
-  
   console.log(JSON.stringify(result, null, 2));
 
   const link = cjb.getCheckjebonLink(shoppingList);
@@ -37,8 +172,43 @@ cjb.getPricesForProducts(shoppingList).then(result => {
 
   const lastUpdate = cjb.pricesLastUpdated();
   console.log(lastUpdate);
-
 });
+```
+
+### Multi-Supermarket Shopping Optimizer
+
+```javascript
+const cjb = require('./checkjebon');
+
+const products = [
+  "1,5 liter halfvolle melk",
+  "250 gram roomboter",
+  "6 eieren",
+  "1 kilo bananen"
+];
+
+// Get list of available supermarkets
+cjb.getSupermarkets().then(supermarkets => {
+  console.log("Available supermarkets:");
+  supermarkets.forEach(s => console.log(`  ${s.code}: ${s.name}`));
+});
+
+// Optimize shopping across multiple stores
+const maxStores = 3;
+const selectedStores = ["ah", "dirk", "jumbo", "vomar", "lidl", "aldi"];
+
+cjb.getOptimalShoppingPlan(products, maxStores, selectedStores)
+  .then(result => {
+    console.log(`Total Cost: €${result.totalCost.toFixed(2)}`);
+    console.log(`Stores to Visit: ${result.supermarkets.length}\n`);
+    
+    result.supermarkets.forEach(store => {
+      console.log(`${store.name}:`);
+      store.products.forEach(p => {
+        console.log(`  - ${p.name}: €${p.price.toFixed(2)}`);
+      });
+    });
+  });
 ```
 
 ## Running the Examples

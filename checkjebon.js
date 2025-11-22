@@ -6,6 +6,19 @@ const SUPERMARKETS_URL = 'https://www.checkjebon.nl/data/supermarkets.json';
 
 
 /**
+ * Get a list of all available supermarkets with their code, name, and icon.
+ * @returns {Promise<Array<{code: string, name: string, icon: string|null}>>} Array of supermarkets with code, name, and icon
+ */
+async function getSupermarkets() {
+  const supermarkets = await getSupermarketsJson();
+  return supermarkets.map(s => ({
+    code: s.n,
+    name: s.c,
+    icon: s.i || null
+  }));
+}
+
+/**
  * Get verbose price info for a list of product names.
  * Falls back to average price with isEstimate: true if not found at a supermarket.
  * Rounds all prices to two decimals.
@@ -105,6 +118,182 @@ function pricesLastUpdated() {
     } catch (e) {}
   }
   return lastModified;
+}
+
+/**
+ * Get an optimal shopping plan by finding the best combination of supermarkets to minimize total cost.
+ * Uses an exhaustive search to evaluate all possible combinations within the maximum store limit.
+ * @param {string[]} productNames - List of products to buy
+ * @param {number} maxSupermarketVisitCount - Maximum number of supermarkets to visit
+ * @param {string[]} selectedSupermarketCodes - Array of supermarket codes to choose from
+ * @returns {Promise<{totalCost: number, supermarkets: Array<{code: string, name: string, icon: string|null, products: Array}>}>} Object with totalCost and array of selected supermarkets with their assigned products
+ */
+async function getOptimalShoppingPlan(productNames, maxSupermarketVisitCount, selectedSupermarketCodes) {
+  // Get prices for all products at all supermarkets
+  const allPrices = await getPricesForProducts(productNames);
+  
+  // Filter to only selected supermarkets
+  const selectedSupermarkets = allPrices.filter(s => 
+    selectedSupermarketCodes.includes(s.code)
+  );
+  
+  if (selectedSupermarkets.length === 0) {
+    throw new Error('No matching supermarkets found from selectedSupermarketCodes');
+  }
+  
+  // Build a matrix of prices: products x supermarkets
+  // For each product, track which supermarket has the best price
+  const productCount = productNames.length;
+  const supermarketCount = selectedSupermarkets.length;
+  
+  // Helper function to check if a product has a valid, non-estimated price
+  const isValidPrice = (product) => {
+    return product && !product.isEstimate && typeof product.price === 'number';
+  };
+  
+  // Create price matrix: priceMatrix[productIndex][supermarketIndex] = price (or null)
+  const priceMatrix = [];
+  for (let p = 0; p < productCount; p++) {
+    priceMatrix[p] = [];
+    for (let s = 0; s < supermarketCount; s++) {
+      const product = selectedSupermarkets[s].products[p];
+      priceMatrix[p][s] = product.price;
+    }
+  }
+  
+  // Find optimal assignment using a greedy approach:
+  // Iteratively select supermarkets that provide the most products at their cheapest price,
+  // minimizing total cost while respecting the maximum number of stores constraint.
+  
+  const bestCombination = findBestSupermarketCombination(
+    priceMatrix, 
+    selectedSupermarkets, 
+    productNames,
+    maxSupermarketVisitCount
+  );
+  
+  return bestCombination;
+}
+
+/**
+ * Find the best combination of supermarkets using an exhaustive search
+ * @param {Array<Array<number|null>>} priceMatrix - Matrix of prices [product][supermarket]
+ * @param {Array} supermarkets - Array of supermarket objects
+ * @param {string[]} productNames - Product names
+ * @param {number} maxStores - Maximum number of stores to visit
+ * @returns {Object} Best combination with totalCost and supermarkets
+ */
+function findBestSupermarketCombination(priceMatrix, supermarkets, productNames, maxStores) {
+  const productCount = productNames.length;
+  const supermarketCount = supermarkets.length;
+  const supermarketIndices = Array.from({ length: supermarketCount }, (_, i) => i);
+
+  let bestSolution = {
+    totalCost: Infinity,
+    coveredCount: -1,
+    supermarkets: [],
+    assignments: []
+  };
+
+  // Helper to generate combinations
+  function getCombinations(arr, k) {
+    const results = [];
+    function helper(start, combo) {
+      if (combo.length === k) {
+        results.push([...combo]);
+        return;
+      }
+      for (let i = start; i < arr.length; i++) {
+        combo.push(arr[i]);
+        helper(i + 1, combo);
+        combo.pop();
+      }
+    }
+    helper(0, []);
+    return results;
+  }
+
+  // Iterate over combination sizes from 1 to maxStores
+  for (let k = 1; k <= maxStores; k++) {
+    const combinations = getCombinations(supermarketIndices, k);
+    for (const combination of combinations) {
+      let currentCost = 0;
+      let currentCoveredCount = 0;
+      const currentAssignments = new Array(productCount).fill(-1);
+
+      for (let p = 0; p < productCount; p++) {
+        let minPrice = Infinity;
+        let bestStore = -1;
+
+        for (const s of combination) {
+          const price = priceMatrix[p][s];
+          if (price !== null && price < minPrice) {
+            minPrice = price;
+            bestStore = s;
+          }
+        }
+
+        if (bestStore !== -1) {
+          currentCost += minPrice;
+          currentAssignments[p] = bestStore;
+          currentCoveredCount++;
+        } else {
+          // Not found in this combination.
+          // Assign to first store in combination just to have it somewhere
+          currentAssignments[p] = combination[0];
+        }
+      }
+
+      // Check if this is better
+      if (currentCoveredCount > bestSolution.coveredCount) {
+        bestSolution = {
+          totalCost: currentCost,
+          coveredCount: currentCoveredCount,
+          supermarkets: combination,
+          assignments: currentAssignments
+        };
+      } else if (currentCoveredCount === bestSolution.coveredCount) {
+        if (currentCost < bestSolution.totalCost) {
+          bestSolution = {
+            totalCost: currentCost,
+            coveredCount: currentCoveredCount,
+            supermarkets: combination,
+            assignments: currentAssignments
+          };
+        }
+      }
+    }
+  }
+
+  // Construct result
+  const result = {
+    totalCost: bestSolution.totalCost === Infinity ? 0 : roundPrice(bestSolution.totalCost),
+    supermarkets: []
+  };
+
+  if (bestSolution.supermarkets.length > 0) {
+    for (const storeIndex of bestSolution.supermarkets) {
+      const store = supermarkets[storeIndex];
+      const storeProducts = [];
+      
+      for (let p = 0; p < productCount; p++) {
+        if (bestSolution.assignments[p] === storeIndex) {
+          storeProducts.push(store.products[p]);
+        }
+      }
+      
+      if (storeProducts.length > 0) {
+        result.supermarkets.push({
+          code: store.code,
+          name: store.name,
+          icon: store.icon,
+          products: storeProducts
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 
@@ -303,6 +492,8 @@ async function getSupermarketsJson() {
 
 const exported = {
   getPricesForProducts,
+  getOptimalShoppingPlan,
+  getSupermarkets,
   getCheckjebonLink,
   pricesLastUpdated
 };

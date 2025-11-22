@@ -1,4 +1,4 @@
-const { getPricesForProducts, getCheckjebonLink, pricesLastUpdated } = require('./checkjebon');
+const { getPricesForProducts, getOptimalShoppingPlan, getSupermarkets, getCheckjebonLink, pricesLastUpdated } = require('./checkjebon');
 
 const products = [
   "1,5 liter halfvolle melk",
@@ -40,6 +40,33 @@ const products = [
     console.log(`\nLast update: ${new Date(lastUpdated).toLocaleString()}`);
   } else {
     console.log('\nLast update: unknown');
+  }
+
+  // Example: Multi-supermarket shopping optimizer
+  console.log('\n\n========================================');
+  console.log('MULTI-SUPERMARKET SHOPPING OPTIMIZER');
+  console.log('========================================\n');
+  
+  const maxVisits = 3;
+  const selectedStores = ["ah", "aldi", "dirk", "jumbo", "lidl", "vomar"];
+  
+  console.log(`Finding optimal combination of up to ${maxVisits} stores from: ${selectedStores.join(', ')}\n`);
+  
+  const optimal = await getOptimalShoppingPlan(products, maxVisits, selectedStores);
+  
+  console.log(`Total Cost: €${optimal.totalCost.toFixed(2)}`);
+  console.log(`Stores to Visit: ${optimal.supermarkets.length}\n`);
+  
+  for (const store of optimal.supermarkets) {
+    const storeTotal = store.products.reduce((sum, p) => sum + (typeof p.price === 'number' ? p.price : 0), 0);
+    console.log(`\n${store.name} (${store.code})${store.icon ? ' [' + store.icon + ']' : ''} - €${storeTotal.toFixed(2)}`);
+    console.table(
+      store.products.map(p => ({
+        Product: !p.isEstimate ? p.name : p.originalQuery + ' (geschat)',
+        Amount: p.amount || '',
+        Price: typeof p.price === 'number' ? `€${p.price.toFixed(2)}` : ''
+      }))
+    );
   }
 
 })();
