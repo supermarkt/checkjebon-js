@@ -24,7 +24,7 @@ describe('getPricesForProductsAtMultipleSupermarkets', function () {
   });
 
   it('should respect the maxSupermarketVisitCount limit', async () => {
-    const selectedStores = ["ah", "dirk", "jumbo", "vomar", "lidl"];
+    const selectedStores = ["ah", "dirk", "jumbo", "lidl", "vomar"];
     const maxVisits = 2;
     const result = await getPricesForProductsAtMultipleSupermarkets(testProducts, maxVisits, selectedStores);
     

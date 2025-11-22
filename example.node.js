@@ -48,7 +48,7 @@ const products = [
   console.log('========================================\n');
   
   const maxVisits = 3;
-  const selectedStores = ["ah", "dirk", "jumbo", "vomar", "lidl", "aldi"];
+  const selectedStores = ["ah", "aldi", "dirk", "jumbo", "lidl", "vomar"];
   
   console.log(`Finding optimal combination of up to ${maxVisits} stores from: ${selectedStores.join(', ')}\n`);
   
@@ -62,7 +62,7 @@ const products = [
     console.log(`\n${store.name} (${store.code})${store.icon ? ' [' + store.icon + ']' : ''} - €${storeTotal.toFixed(2)}`);
     console.table(
       store.products.map(p => ({
-        Product: p.name,
+        Product: !p.isEstimate ? p.name : p.originalQuery + ' (geschat)',
         Amount: p.amount || '',
         Price: typeof p.price === 'number' ? `€${p.price.toFixed(2)}` : ''
       }))

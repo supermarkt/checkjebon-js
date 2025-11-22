@@ -156,8 +156,7 @@ async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSuper
     priceMatrix[p] = [];
     for (let s = 0; s < supermarketCount; s++) {
       const product = selectedSupermarkets[s].products[p];
-      // Only use real prices, not estimates
-      priceMatrix[p][s] = isValidPrice(product) ? product.price : null;
+      priceMatrix[p][s] = product.price;
     }
   }
   
@@ -176,7 +175,7 @@ async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSuper
 }
 
 /**
- * Find the best combination of supermarkets using a greedy algorithm
+ * Find the best combination of supermarkets using an exhaustive search
  * @param {Array<Array<number|null>>} priceMatrix - Matrix of prices [product][supermarket]
  * @param {Array} supermarkets - Array of supermarket objects
  * @param {string[]} productNames - Product names
@@ -186,145 +185,113 @@ async function getPricesForProductsAtMultipleSupermarkets(productNames, maxSuper
 function findBestSupermarketCombination(priceMatrix, supermarkets, productNames, maxStores) {
   const productCount = productNames.length;
   const supermarketCount = supermarkets.length;
-  
-  // For each product, find the cheapest price and which store has it
-  const cheapestPerProduct = [];
-  for (let p = 0; p < productCount; p++) {
-    let minPrice = Infinity;
-    let minStoreIndex = -1;
-    
-    for (let s = 0; s < supermarketCount; s++) {
-      if (priceMatrix[p][s] !== null && priceMatrix[p][s] < minPrice) {
-        minPrice = priceMatrix[p][s];
-        minStoreIndex = s;
+  const supermarketIndices = Array.from({ length: supermarketCount }, (_, i) => i);
+
+  let bestSolution = {
+    totalCost: Infinity,
+    coveredCount: -1,
+    supermarkets: [],
+    assignments: []
+  };
+
+  // Helper to generate combinations
+  function getCombinations(arr, k) {
+    const results = [];
+    function helper(start, combo) {
+      if (combo.length === k) {
+        results.push([...combo]);
+        return;
+      }
+      for (let i = start; i < arr.length; i++) {
+        combo.push(arr[i]);
+        helper(i + 1, combo);
+        combo.pop();
       }
     }
-    
-    cheapestPerProduct.push({
-      productIndex: p,
-      storeIndex: minStoreIndex,
-      price: minPrice === Infinity ? null : minPrice
-    });
+    helper(0, []);
+    return results;
   }
-  
-  // Count how many products each store would provide at cheapest price
-  const storeProductCount = new Array(supermarketCount).fill(0);
-  const storeProductIndices = Array.from({ length: supermarketCount }, () => []);
-  
-  for (const item of cheapestPerProduct) {
-    if (item.storeIndex !== -1) {
-      storeProductCount[item.storeIndex]++;
-      storeProductIndices[item.storeIndex].push(item.productIndex);
-    }
-  }
-  
-  // Greedy selection: iteratively pick stores that provide the most products
-  // at their cheapest price, until we reach maxStores or all products are covered
-  const selectedStoreIndices = [];
-  const assignedProducts = new Set();
-  const productAssignments = new Array(productCount).fill(-1);
-  
-  while (selectedStoreIndices.length < maxStores && assignedProducts.size < productCount) {
-    let bestStoreIndex = -1;
-    let bestCount = 0;
-    let bestTotalPrice = Infinity;
-    
-    // Find the store that provides the most unassigned products at cheapest price
-    for (let s = 0; s < supermarketCount; s++) {
-      if (selectedStoreIndices.includes(s)) continue;
-      
-      const unassignedProducts = storeProductIndices[s].filter(p => !assignedProducts.has(p));
-      
-      if (unassignedProducts.length > bestCount) {
-        // Calculate total price for these products at this store
-        const totalPrice = unassignedProducts.reduce((sum, p) => sum + (priceMatrix[p][s] || 0), 0);
-        bestCount = unassignedProducts.length;
-        bestStoreIndex = s;
-        bestTotalPrice = totalPrice;
-      } else if (unassignedProducts.length === bestCount && unassignedProducts.length > 0) {
-        // Tie-breaker: choose store with lower total price
-        const totalPrice = unassignedProducts.reduce((sum, p) => sum + (priceMatrix[p][s] || 0), 0);
-        if (totalPrice < bestTotalPrice) {
-          bestStoreIndex = s;
-          bestTotalPrice = totalPrice;
-        }
-      }
-    }
-    
-    // If no store can provide any unassigned products, break
-    if (bestStoreIndex === -1 || bestCount === 0) break;
-    
-    // Select this store and assign its products
-    selectedStoreIndices.push(bestStoreIndex);
-    for (const productIndex of storeProductIndices[bestStoreIndex]) {
-      if (!assignedProducts.has(productIndex)) {
-        assignedProducts.add(productIndex);
-        productAssignments[productIndex] = bestStoreIndex;
-      }
-    }
-  }
-  
-  // If we still have slots and unassigned products, try to fill remaining products
-  // by adding stores even if they're not the cheapest
-  if (selectedStoreIndices.length < maxStores && assignedProducts.size < productCount) {
-    for (let s = 0; s < supermarketCount; s++) {
-      if (selectedStoreIndices.length >= maxStores) break;
-      if (selectedStoreIndices.includes(s)) continue;
-      
-      // Check if this store has any unassigned products
-      let hasUnassigned = false;
+
+  // Iterate over combination sizes from 1 to maxStores
+  for (let k = 1; k <= maxStores; k++) {
+    const combinations = getCombinations(supermarketIndices, k);
+    for (const combination of combinations) {
+      let currentCost = 0;
+      let currentCoveredCount = 0;
+      const currentAssignments = new Array(productCount).fill(-1);
+
       for (let p = 0; p < productCount; p++) {
-        if (!assignedProducts.has(p) && priceMatrix[p][s] !== null) {
-          hasUnassigned = true;
-          break;
-        }
-      }
-      
-      if (hasUnassigned) {
-        selectedStoreIndices.push(s);
-        // Assign unassigned products to this store
-        for (let p = 0; p < productCount; p++) {
-          if (!assignedProducts.has(p) && priceMatrix[p][s] !== null) {
-            assignedProducts.add(p);
-            productAssignments[p] = s;
+        let minPrice = Infinity;
+        let bestStore = -1;
+
+        for (const s of combination) {
+          const price = priceMatrix[p][s];
+          if (price !== null && price < minPrice) {
+            minPrice = price;
+            bestStore = s;
           }
         }
+
+        if (bestStore !== -1) {
+          currentCost += minPrice;
+          currentAssignments[p] = bestStore;
+          currentCoveredCount++;
+        } else {
+          // Not found in this combination.
+          // Assign to first store in combination just to have it somewhere
+          currentAssignments[p] = combination[0];
+        }
+      }
+
+      // Check if this is better
+      if (currentCoveredCount > bestSolution.coveredCount) {
+        bestSolution = {
+          totalCost: currentCost,
+          coveredCount: currentCoveredCount,
+          supermarkets: combination,
+          assignments: currentAssignments
+        };
+      } else if (currentCoveredCount === bestSolution.coveredCount) {
+        if (currentCost < bestSolution.totalCost) {
+          bestSolution = {
+            totalCost: currentCost,
+            coveredCount: currentCoveredCount,
+            supermarkets: combination,
+            assignments: currentAssignments
+          };
+        }
       }
     }
   }
-  
-  // Build the result
+
+  // Construct result
   const result = {
-    totalCost: 0,
+    totalCost: bestSolution.totalCost === Infinity ? 0 : roundPrice(bestSolution.totalCost),
     supermarkets: []
   };
-  
-  // For each selected store, collect products assigned to it
-  for (const storeIndex of selectedStoreIndices) {
-    const store = supermarkets[storeIndex];
-    const storeProducts = [];
-    
-    for (let p = 0; p < productCount; p++) {
-      if (productAssignments[p] === storeIndex) {
-        const productData = store.products[p];
-        storeProducts.push(productData);
-        result.totalCost += productData.price || 0;
+
+  if (bestSolution.supermarkets.length > 0) {
+    for (const storeIndex of bestSolution.supermarkets) {
+      const store = supermarkets[storeIndex];
+      const storeProducts = [];
+      
+      for (let p = 0; p < productCount; p++) {
+        if (bestSolution.assignments[p] === storeIndex) {
+          storeProducts.push(store.products[p]);
+        }
+      }
+      
+      if (storeProducts.length > 0) {
+        result.supermarkets.push({
+          code: store.code,
+          name: store.name,
+          icon: store.icon,
+          products: storeProducts
+        });
       }
     }
-    
-    if (storeProducts.length > 0) {
-      result.supermarkets.push({
-        code: store.code,
-        name: store.name,
-        icon: store.icon,
-        products: storeProducts
-      });
-    }
   }
-  
-  // Round total cost
-  result.totalCost = roundPrice(result.totalCost);
-  
+
   return result;
 }
 
