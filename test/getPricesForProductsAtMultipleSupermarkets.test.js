@@ -7,7 +7,11 @@ describe('getPricesForProductsAtMultipleSupermarkets', function () {
   const testProducts = [
     '1 liter halfvolle melk',
     '250 gram roomboter',
-    '6 eieren'
+    '6 eieren',
+    '1 kilo bananen',
+    '400 gram shoarma',
+    'pita brood',
+    '500 ml soep'
   ];
 
   it('should return an object with totalCost and supermarkets array', async () => {

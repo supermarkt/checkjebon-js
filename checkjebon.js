@@ -185,66 +185,110 @@ function findBestSupermarketCombination(priceMatrix, supermarkets, productNames,
   const productCount = productNames.length;
   const supermarketCount = supermarkets.length;
   
-  // Track which products have been assigned
-  const assignedProducts = new Array(productCount).fill(false);
-  const productAssignments = new Array(productCount).fill(-1); // supermarket index for each product
-  
-  const selectedStoreIndices = [];
-  
-  // Greedy selection: repeatedly pick the store that gives us the best marginal value
-  for (let iteration = 0; iteration < Math.min(maxStores, supermarketCount); iteration++) {
-    let bestStoreIndex = -1;
-    let bestValue = -Infinity;
-    let bestNewAssignments = [];
+  // For each product, find the cheapest price and which store has it
+  const cheapestPerProduct = [];
+  for (let p = 0; p < productCount; p++) {
+    let minPrice = Infinity;
+    let minStoreIndex = -1;
     
-    // Try each unselected store
+    for (let s = 0; s < supermarketCount; s++) {
+      if (priceMatrix[p][s] !== null && priceMatrix[p][s] < minPrice) {
+        minPrice = priceMatrix[p][s];
+        minStoreIndex = s;
+      }
+    }
+    
+    cheapestPerProduct.push({
+      productIndex: p,
+      storeIndex: minStoreIndex,
+      price: minPrice === Infinity ? null : minPrice
+    });
+  }
+  
+  // Count how many products each store would provide at cheapest price
+  const storeProductCount = new Array(supermarketCount).fill(0);
+  const storeProductIndices = Array.from({ length: supermarketCount }, () => []);
+  
+  for (const item of cheapestPerProduct) {
+    if (item.storeIndex !== -1) {
+      storeProductCount[item.storeIndex]++;
+      storeProductIndices[item.storeIndex].push(item.productIndex);
+    }
+  }
+  
+  // Greedy selection: iteratively pick stores that provide the most products
+  // at their cheapest price, until we reach maxStores or all products are covered
+  const selectedStoreIndices = [];
+  const assignedProducts = new Set();
+  const productAssignments = new Array(productCount).fill(-1);
+  
+  while (selectedStoreIndices.length < maxStores && assignedProducts.size < productCount) {
+    let bestStoreIndex = -1;
+    let bestCount = 0;
+    let bestTotalPrice = Infinity;
+    
+    // Find the store that provides the most unassigned products at cheapest price
     for (let s = 0; s < supermarketCount; s++) {
       if (selectedStoreIndices.includes(s)) continue;
       
-      // Calculate value of adding this store
-      const newAssignments = [];
-      let value = 0;
+      const unassignedProducts = storeProductIndices[s].filter(p => !assignedProducts.has(p));
       
+      if (unassignedProducts.length > bestCount) {
+        // Calculate total price for these products at this store
+        const totalPrice = unassignedProducts.reduce((sum, p) => sum + (priceMatrix[p][s] || 0), 0);
+        bestCount = unassignedProducts.length;
+        bestStoreIndex = s;
+        bestTotalPrice = totalPrice;
+      } else if (unassignedProducts.length === bestCount && unassignedProducts.length > 0) {
+        // Tie-breaker: choose store with lower total price
+        const totalPrice = unassignedProducts.reduce((sum, p) => sum + (priceMatrix[p][s] || 0), 0);
+        if (totalPrice < bestTotalPrice) {
+          bestStoreIndex = s;
+          bestTotalPrice = totalPrice;
+        }
+      }
+    }
+    
+    // If no store can provide any unassigned products, break
+    if (bestStoreIndex === -1 || bestCount === 0) break;
+    
+    // Select this store and assign its products
+    selectedStoreIndices.push(bestStoreIndex);
+    for (const productIndex of storeProductIndices[bestStoreIndex]) {
+      if (!assignedProducts.has(productIndex)) {
+        assignedProducts.add(productIndex);
+        productAssignments[productIndex] = bestStoreIndex;
+      }
+    }
+  }
+  
+  // If we still have slots and unassigned products, try to fill remaining products
+  // by adding stores even if they're not the cheapest
+  if (selectedStoreIndices.length < maxStores && assignedProducts.size < productCount) {
+    for (let s = 0; s < supermarketCount; s++) {
+      if (selectedStoreIndices.length >= maxStores) break;
+      if (selectedStoreIndices.includes(s)) continue;
+      
+      // Check if this store has any unassigned products
+      let hasUnassigned = false;
       for (let p = 0; p < productCount; p++) {
-        if (priceMatrix[p][s] === null) continue;
-        
-        if (!assignedProducts[p]) {
-          // Product not yet assigned - this store can provide it
-          newAssignments.push({ productIndex: p, price: priceMatrix[p][s] });
-          value += 1000; // High value for covering a new product
-        } else {
-          // Product already assigned - check if this store is cheaper
-          const currentStoreIndex = productAssignments[p];
-          const currentPrice = priceMatrix[p][currentStoreIndex];
-          const newPrice = priceMatrix[p][s];
-          
-          if (newPrice < currentPrice) {
-            const savings = currentPrice - newPrice;
-            newAssignments.push({ productIndex: p, price: newPrice });
-            value += savings * 100; // Value is the savings
-          }
+        if (!assignedProducts.has(p) && priceMatrix[p][s] !== null) {
+          hasUnassigned = true;
+          break;
         }
       }
       
-      if (value > bestValue && newAssignments.length > 0) {
-        bestValue = value;
-        bestStoreIndex = s;
-        bestNewAssignments = newAssignments;
+      if (hasUnassigned) {
+        selectedStoreIndices.push(s);
+        // Assign unassigned products to this store
+        for (let p = 0; p < productCount; p++) {
+          if (!assignedProducts.has(p) && priceMatrix[p][s] !== null) {
+            assignedProducts.add(p);
+            productAssignments[p] = s;
+          }
+        }
       }
     }
-    
-    // If no store improves the situation, stop
-    if (bestStoreIndex === -1) break;
-    
-    // Add this store and update assignments
-    selectedStoreIndices.push(bestStoreIndex);
-    for (const assignment of bestNewAssignments) {
-      assignedProducts[assignment.productIndex] = true;
-      productAssignments[assignment.productIndex] = bestStoreIndex;
-    }
-    
-    // If all products are assigned, we can stop
-    if (assignedProducts.every(a => a)) break;
   }
   
   // Build the result
